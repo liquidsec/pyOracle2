@@ -1,5 +1,7 @@
 # PyOracle2
 
+https://blog.liquidsec.net/2020/11/30/introducing-pyoracle2/
+
 A python-based padding oracle tool.
 
 Although several other padding oracle attack tools exist, some quite excellent, there are relatively few written in python. This tool provides another take on attacking padding oracle vulnerabilities with a handful of less common advanced features. 
