@@ -16,7 +16,7 @@ Special Features:
 
 Planned improvements:
 
-- Different encoding modes (only base64 is supported currently, although this is definately the most common)
+- ~~Different encoding modes (only base64 is supported currently, although this is definately the most common)~~ **Hex support added**
 - Ability to operate inside of XML parameters and JSON variables
 - Support for timing-based oracles
 
