@@ -57,6 +57,9 @@ httpMethod = GET
 # specify the input mode (parameter, body, cookie)
 inputMode = cookie
 
+# encoding mode. Current options are base64 or hex
+encodingMode = base64
+
 # Specify the parameter which contains the vulnerable variable
 vulnerableParameter = auth
 
