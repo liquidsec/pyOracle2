@@ -179,14 +179,16 @@ class Job:
             elif self.inputMode == "cookie":
                 tempcookies = self.cookies.copy()
                 tempcookies[self.vulnerableParameter] = encryptedstring
+                # add cookies to headers
+                
+                cookieString = makeCookieString(tempcookies)
+                headers['Cookie'] = cookieString
             
             # add the additional parameters
             for additionalParameter in self.additionalParameters.items():
                 urlBuilder = urlBuilder + '&' + additionalParameter[0] + '=' + additionalParameter[1] 
 
-            # add cookies to headers
-            cookieString = makeCookieString(tempcookies)
-            headers['Cookie'] = cookieString
+
                 
             r = requests.get(urlBuilder,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)    
                 
