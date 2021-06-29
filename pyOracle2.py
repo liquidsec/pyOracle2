@@ -1,4 +1,4 @@
-# pyOracle 2.0.2
+# pyOracle 2.0.3
 # A python padding oracle vulnerability exploitation tool
 # By Paul Mueller (l1qu1d)
 
@@ -176,9 +176,18 @@ class Job:
                 # add the vulnerable parameter 
                 urlBuilder = urlBuilder + '?' + self.vulnerableParameter + '=' + b64urlEncode(encryptedstring)
 
+                # if we already set a GET, additionals should start with "&"
+                firstDelimiter = "&"
+            else:
+                firstDelimiter = "?"
+
             # add the additional parameters
-            for additionalParameter in self.additionalParameters.items():
-                urlBuilder = urlBuilder + '&' + additionalParameter[0] + '=' + additionalParameter[1] 
+            for idx,additionalParameter in enumerate(self.additionalParameters.items()):
+                if idx == 0:
+                    delimiter = firstDelimiter
+                else:
+                    delimiter = '&'
+                urlBuilder = urlBuilder + delimiter + additionalParameter[0] + '=' + additionalParameter[1] 
 
             tempcookies = self.cookies.copy()            
 
