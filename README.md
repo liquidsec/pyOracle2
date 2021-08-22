@@ -41,23 +41,27 @@ optional arguments:
 pyOracle2 is designed around the creation of a configuration file for each unique "job". The goal is to frontload the configuration of the job so that once it is set correctly, exploitation can occur as easily as possible with a concise CLI command. A sample of the configuration file is provided.
 
 
-Config file example:
+Config file example
+This example config should work out of the box (aside from setting the correct IP address) with the PentesterLab padding oracle exercise iso: https://pentesterlab.com/exercises/padding_oracle/iso
 ```
 [default]
 
-# Job NameError
+# Job Name
 name = Name
 
-# Specifiy the target URL
+# Specify the target URL
 URL = http://127.0.0.1/index.php
 
 # Specify the HTTP method (GET or POST)
 httpMethod = GET
 
+# when using POST, specifiy the POST mode: (form-urlencoded or multipart)
+postFormat = x-www-form-urlencoded
+
 # specify the input mode (parameter, body, cookie)
 inputMode = cookie
 
-# encoding mode. Current options are base64 or hex
+# encoding mode. Current options are base64, base64Url, or hex
 encodingMode = base64
 
 # Specify the parameter which contains the vulnerable variable
@@ -74,18 +78,21 @@ httpProxyOn = True
 httpProxyIp = 127.0.0.1
 httpProxyPort = 8080
 
-# Specifiy headers to add to the request (specified in a dictionary as a key/value pair)
+# Specify headers to add to the request (specified in a dictionary as a key/value pair)
 
-headers = {"User-Agent":"Mozilla/5.0"}
+headers = {"User-Agent":"Mozilla/5.0","Content-Type":"application/json"}
+
 
 # Specify Cookies to add to the request (specified in a dictionary as a key/value pair)
 cookies = {}
+
 
 # Specify the IV mode
 
 # In most implementations, the IV is provided as the 'first block' of the ciphertext. 
 # In other cases, the IV may be kept a known secret by both endpoints. In such a case, it should still be possible to decrypt everything but the first block.
 # The IV may also be a static values such as all zeroes.
+
 
 # Modes: 
 
