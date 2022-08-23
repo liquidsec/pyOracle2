@@ -713,9 +713,11 @@ else:
 
         elif postFormat == "multipart":
             pass
-           # handleError("[x]CONFIG ERROR: multipart mode not supported yet :(")
+
+        elif postFormat == "json":
+            pass
         else:
-            handleError("[x]CONFIG ERROR: When httpMethod is POST postFormat must be 'form-urlencoded' or 'multipart'")   
+            handleError("[x]CONFIG ERROR: When httpMethod is POST postFormat must be 'form-urlencoded', 'multipart', or 'json'")   
     # validate proxy IP
     if httpProxyIp:
         try:
