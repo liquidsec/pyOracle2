@@ -238,9 +238,9 @@ class Job:
                 self.headers['Content-Type'] = multipartContentType
                 r = requests.post(self.URL,data=postData,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)
 
-	    elif (self.portFormat == "json"):
+            elif (self.portFormat == "json"):
 
-		self.headers["Content-Type"] = "application/json"
+                self.headers["Content-Type"] = "application/json"
                 r = requests.post(self.URL,json=postData,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)
                 return r
 
