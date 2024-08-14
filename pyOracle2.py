@@ -242,7 +242,7 @@ class Job:
 
                 self.headers["Content-Type"] = "application/json"
                 r = requests.post(self.URL,json=postData,headers=self.headers,proxies=self.proxy,verify=False,allow_redirects=False)
-            return r
+        return r
 
     def fakeIV(self):
         return [0] * self.blocksize
